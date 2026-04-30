@@ -8,7 +8,6 @@ The project is organized into the following key components:
 
 - **Clustering.ipynb**: The first phase of the pipeline. This notebook handles data preprocessing, exploratory data analysis, and the implementation of various clustering algorithms (e.g., K-Means, DBSCAN, Hierarchical Clustering). It aims to segment the dataset and assign cluster labels that are later used for classification.
 - **Classification.ipynb**: The second phase of the pipeline. This notebook takes the processed data and cluster labels from the first phase to train, evaluate, and optimize classification models. It includes techniques to handle data leakage, cross-validation, and comprehensive performance metrics.
-- **ML Workflow Fraud Detection.pdf**: Documentation and visual representation of the overall machine learning workflow and architecture.
 - **models/**: Directory intended for saving trained model artifacts (e.g., `.pkl` or `.joblib` files) for future deployment or inference.
 - **images/**: Directory for storing generated plots, charts, and visual assets used in the notebooks or documentation.
 
