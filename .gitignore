@@ -3,11 +3,22 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Caches & Coverage
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Virtual Environments
+# Virtual Environments & Env Files
 .env
+.env.*
+!.env.example
+.venv/
 .venv
 env/
 venv/
@@ -29,10 +40,8 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# If you wish to exclude data and model files, uncomment the lines below
+# Optional exclusions (models/ and images/*.png are intentionally tracked)
 *.csv
 *.dat
 *.pkl
 *.pdf
-# *.joblib
-# models/
