@@ -116,9 +116,7 @@ class BankSegmentationAnomalyDetector:
         """
         cleaned = clean_transactions(df, drop_duplicates=True)
         if len(cleaned) < self.config.n_clusters:
-            raise ValueError(
-                f"Need at least {self.config.n_clusters} rows to fit K-Means, got {len(cleaned)}."
-            )
+            raise ValueError(f"Need at least {self.config.n_clusters} rows to fit K-Means, got {len(cleaned)}.")
 
         feature_frame = cleaned[list(MODEL_FEATURES)]
         encoded = self.preprocessor.fit_transform(feature_frame)
@@ -196,9 +194,7 @@ class BankSegmentationAnomalyDetector:
         combined_intensity = 0.55 * dist_ratio + 0.45 * z_ratio
         anomaly_scores = 1.0 / (1.0 + np.exp(-2.2 * (combined_intensity - 1.0)))
 
-        is_anomaly = (centroid_distances > self.distance_threshold_) | (
-            max_zscores >= self.config.zscore_threshold
-        )
+        is_anomaly = (centroid_distances > self.distance_threshold_) | (max_zscores >= self.config.zscore_threshold)
 
         result = pd.DataFrame(
             {

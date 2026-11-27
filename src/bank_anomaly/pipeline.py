@@ -56,9 +56,7 @@ class ClassificationConfig:
 
     def __post_init__(self) -> None:
         if self.model_name not in SUPPORTED_MODELS:
-            raise ValueError(
-                f"Unsupported model_name {self.model_name!r}; choose from {sorted(SUPPORTED_MODELS)}."
-            )
+            raise ValueError(f"Unsupported model_name {self.model_name!r}; choose from {sorted(SUPPORTED_MODELS)}.")
         if not 0.05 <= self.test_size <= 0.5:
             raise ValueError(f"test_size must be in [0.05, 0.5], got {self.test_size}.")
 
@@ -166,9 +164,7 @@ class FraudClassificationPipeline:
         )
         return dict(self.metrics_)
 
-    def _resample_training_split(
-        self, x_train_enc: np.ndarray, y_train: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
+    def _resample_training_split(self, x_train_enc: np.ndarray, y_train: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Apply SMOTE strictly on encoded training data when minority count allows."""
         if not self.config.use_smote:
             return x_train_enc, y_train
@@ -183,9 +179,7 @@ class FraudClassificationPipeline:
         smote = SMOTE(random_state=self.config.random_state, k_neighbors=k_neighbors)
         return smote.fit_resample(x_train_enc, y_train)
 
-    def _evaluate_predictions(
-        self, y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray
-    ) -> dict[str, float]:
+    def _evaluate_predictions(self, y_true: np.ndarray, y_pred: np.ndarray, y_prob: np.ndarray) -> dict[str, float]:
         """Compute standard binary classification and ranking metrics on held-out test set."""
         return {
             "accuracy": round(float(accuracy_score(y_true, y_pred)), 4),

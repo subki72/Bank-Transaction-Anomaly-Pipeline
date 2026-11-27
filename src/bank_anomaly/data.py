@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 import io
 import logging
 
@@ -118,28 +118,38 @@ def _sample_regimes(
     half_norm = n_norm // 2
 
     # Two distinct customer behavioral clusters for realistic segmentation
-    amounts_norm = np.concatenate([
-        rng.gamma(shape=1.6, scale=75.0, size=half_norm),
-        rng.gamma(shape=2.6, scale=140.0, size=n_norm - half_norm),
-    ])
-    balances_norm = np.concatenate([
-        rng.normal(loc=2200.0, scale=700.0, size=half_norm).clip(120.0, 6500.0),
-        rng.normal(loc=8600.0, scale=2100.0, size=n_norm - half_norm).clip(3500.0, 15000.0),
-    ])
-    ages_norm = np.concatenate([
-        rng.integers(18, 38, size=half_norm).astype(float),
-        rng.integers(40, 80, size=n_norm - half_norm).astype(float),
-    ])
+    amounts_norm = np.concatenate(
+        [
+            rng.gamma(shape=1.6, scale=75.0, size=half_norm),
+            rng.gamma(shape=2.6, scale=140.0, size=n_norm - half_norm),
+        ]
+    )
+    balances_norm = np.concatenate(
+        [
+            rng.normal(loc=2200.0, scale=700.0, size=half_norm).clip(120.0, 6500.0),
+            rng.normal(loc=8600.0, scale=2100.0, size=n_norm - half_norm).clip(3500.0, 15000.0),
+        ]
+    )
+    ages_norm = np.concatenate(
+        [
+            rng.integers(18, 38, size=half_norm).astype(float),
+            rng.integers(40, 80, size=n_norm - half_norm).astype(float),
+        ]
+    )
     durations_norm = rng.normal(loc=115.0, scale=42.0, size=n_norm).clip(12.0, 260.0)
     attempts_norm = rng.choice([1.0, 2.0], size=n_norm, p=[0.93, 0.07])
-    occ_norm = np.concatenate([
-        rng.choice(["Student", "Engineer"], size=half_norm, p=[0.7, 0.3]),
-        rng.choice(["Doctor", "Retired", "Engineer"], size=n_norm - half_norm, p=[0.4, 0.35, 0.25]),
-    ])
-    channel_norm = np.concatenate([
-        rng.choice(["Online", "ATM", "Branch"], size=half_norm, p=[0.6, 0.25, 0.15]),
-        rng.choice(["Branch", "ATM", "Online"], size=n_norm - half_norm, p=[0.55, 0.3, 0.15]),
-    ])
+    occ_norm = np.concatenate(
+        [
+            rng.choice(["Student", "Engineer"], size=half_norm, p=[0.7, 0.3]),
+            rng.choice(["Doctor", "Retired", "Engineer"], size=n_norm - half_norm, p=[0.4, 0.35, 0.25]),
+        ]
+    )
+    channel_norm = np.concatenate(
+        [
+            rng.choice(["Online", "ATM", "Branch"], size=half_norm, p=[0.6, 0.25, 0.15]),
+            rng.choice(["Branch", "ATM", "Online"], size=n_norm - half_norm, p=[0.55, 0.3, 0.15]),
+        ]
+    )
 
     if n_anom == 0:
         return amounts_norm, balances_norm, ages_norm, durations_norm, attempts_norm, occ_norm, channel_norm
@@ -190,38 +200,38 @@ def generate_synthetic_transactions(
     )
     perm = rng.permutation(n_rows)
 
-    base_prev = datetime(2023, 1, 1, 8, 0, 0, tzinfo=timezone.utc)
-    base_curr = datetime(2024, 11, 4, 8, 0, 0, tzinfo=timezone.utc)
+    base_prev = datetime(2023, 1, 1, 8, 0, 0, tzinfo=UTC)
+    base_curr = datetime(2024, 11, 4, 8, 0, 0, tzinfo=UTC)
     prev_offsets = rng.integers(0, 365 * 86400, size=n_rows)
     curr_offsets = rng.integers(0, 3600, size=n_rows)
 
     octets_c = rng.integers(1, 255, size=n_rows)
     octets_d = rng.integers(1, 255, size=n_rows)
 
-    df = pd.DataFrame({
-        "TransactionID": [f"TX{idx:06d}" for idx in range(1, n_rows + 1)],
-        "AccountID": [f"AC{int(acc):05d}" for acc in rng.integers(1, 496, size=n_rows)],
-        "TransactionAmount": np.round(amounts[perm], 2),
-        "PreviousTransactionDate": [
-            (base_prev + timedelta(seconds=int(sec))).strftime("%Y-%m-%d %H:%M:%S")
-            for sec in prev_offsets
-        ],
-        "TransactionType": rng.choice(TRANSACTION_TYPES, size=n_rows, p=[0.77, 0.23]),
-        "Location": rng.choice(LOCATIONS, size=n_rows),
-        "DeviceID": [f"D{int(dev):06d}" for dev in rng.integers(1, 500, size=n_rows)],
-        "IP Address": [f"192.0.{int(c)}.{int(d)}" for c, d in zip(octets_c, octets_d, strict=True)],
-        "MerchantID": [f"M{int(m):03d}" for m in rng.integers(1, 101, size=n_rows)],
-        "Channel": channels[perm],
-        "CustomerAge": ages[perm],
-        "CustomerOccupation": occupations[perm],
-        "TransactionDuration": np.round(durations[perm], 1),
-        "LoginAttempts": attempts[perm],
-        "AccountBalance": np.round(balances[perm], 2),
-        "TransactionDate": [
-            (base_curr + timedelta(seconds=int(sec))).strftime("%Y-%m-%d %H:%M:%S")
-            for sec in curr_offsets
-        ],
-    })
+    df = pd.DataFrame(
+        {
+            "TransactionID": [f"TX{idx:06d}" for idx in range(1, n_rows + 1)],
+            "AccountID": [f"AC{int(acc):05d}" for acc in rng.integers(1, 496, size=n_rows)],
+            "TransactionAmount": np.round(amounts[perm], 2),
+            "PreviousTransactionDate": [
+                (base_prev + timedelta(seconds=int(sec))).strftime("%Y-%m-%d %H:%M:%S") for sec in prev_offsets
+            ],
+            "TransactionType": rng.choice(TRANSACTION_TYPES, size=n_rows, p=[0.77, 0.23]),
+            "Location": rng.choice(LOCATIONS, size=n_rows),
+            "DeviceID": [f"D{int(dev):06d}" for dev in rng.integers(1, 500, size=n_rows)],
+            "IP Address": [f"192.0.{int(c)}.{int(d)}" for c, d in zip(octets_c, octets_d, strict=True)],
+            "MerchantID": [f"M{int(m):03d}" for m in rng.integers(1, 101, size=n_rows)],
+            "Channel": channels[perm],
+            "CustomerAge": ages[perm],
+            "CustomerOccupation": occupations[perm],
+            "TransactionDuration": np.round(durations[perm], 1),
+            "LoginAttempts": attempts[perm],
+            "AccountBalance": np.round(balances[perm], 2),
+            "TransactionDate": [
+                (base_curr + timedelta(seconds=int(sec))).strftime("%Y-%m-%d %H:%M:%S") for sec in curr_offsets
+            ],
+        }
+    )
     logger.info("Generated %d deterministic synthetic bank transactions (seed=%d).", len(df), seed)
     return df
 

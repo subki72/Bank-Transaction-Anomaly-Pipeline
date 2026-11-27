@@ -3,28 +3,26 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Sequence
 import json
 import logging
 from pathlib import Path
 import sys
-from typing import Sequence
 
 _SRC_DIR = Path(__file__).resolve().parent / "src"
 if str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
 
 from bank_anomaly.config import PipelineSettings, configure_logging  # noqa: E402
-from bank_anomaly.pipeline import HybridAnomalyPipeline, run_offline_demo  # noqa: E402
 from bank_anomaly.data import generate_synthetic_transactions  # noqa: E402
+from bank_anomaly.pipeline import HybridAnomalyPipeline, run_offline_demo  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the command-line argument parser."""
-    parser = argparse.ArgumentParser(
-        description="Bank Transaction Anomaly Pipeline CLI (--health | --demo | --serve)"
-    )
+    parser = argparse.ArgumentParser(description="Bank Transaction Anomaly Pipeline CLI (--health | --demo | --serve)")
     mode_group = parser.add_mutually_exclusive_group(required=True)
     mode_group.add_argument(
         "--health",
