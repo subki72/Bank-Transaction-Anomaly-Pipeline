@@ -159,6 +159,24 @@ class BankSegmentationAnomalyDetector:
             "calinski_harabasz_score": round(float(calinski_harabasz_score(encoded, labels)), 2),
         }
 
+    def _compute_anomaly_metrics(
+        self, encoded: np.ndarray, num_matrix: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """Compute cluster IDs, centroid distances, max Z-scores, bounded scores, and flags."""
+        assert self.num_means_ is not None and self.num_stds_ is not None
+        cluster_ids = self.kmeans.predict(encoded)
+        centroid_distances = self.kmeans.transform(encoded).min(axis=1)
+        z_scores = np.abs((num_matrix - self.num_means_) / self.num_stds_)
+        max_zscores = np.max(z_scores, axis=1)
+
+        # Bounded logistic blend of centroid distance ratio and maximum feature Z-score
+        dist_ratio = centroid_distances / self.distance_threshold_
+        z_ratio = max_zscores / self.config.zscore_threshold
+        combined_intensity = 0.55 * dist_ratio + 0.45 * z_ratio
+        anomaly_scores = 1.0 / (1.0 + np.exp(-2.2 * (combined_intensity - 1.0)))
+        is_anomaly = (centroid_distances > self.distance_threshold_) | (max_zscores >= self.config.zscore_threshold)
+        return cluster_ids, centroid_distances, max_zscores, anomaly_scores, is_anomaly
+
     def score(self, df: pd.DataFrame) -> pd.DataFrame:
         """Assign cluster segments and compute centroid/Z-score anomaly scores.
 
@@ -168,10 +186,6 @@ class BankSegmentationAnomalyDetector:
         Returns:
             DataFrame containing `cluster_id`, `centroid_distance`, `max_zscore`,
             `anomaly_score` in `[0, 1]`, `is_anomaly`, and `risk_level`.
-
-        Raises:
-            RuntimeError: If detector has not been fitted.
-            ValueError: If input DataFrame is invalid or missing features.
         """
         if not self._is_fitted or self.num_means_ is None or self.num_stds_ is None:
             raise RuntimeError("Detector must be fitted before calling score().")
@@ -181,22 +195,11 @@ class BankSegmentationAnomalyDetector:
             raise ValueError("Inference batch contains missing or non-numeric feature values.")
 
         encoded = self.preprocessor.transform(cleaned[list(MODEL_FEATURES)])
-        cluster_ids = self.kmeans.predict(encoded)
-        centroid_distances = self.kmeans.transform(encoded).min(axis=1)
-
         num_matrix = cleaned[list(MODEL_NUMERICAL_FEATURES)].to_numpy(dtype=float)
-        z_scores = np.abs((num_matrix - self.num_means_) / self.num_stds_)
-        max_zscores = np.max(z_scores, axis=1)
-
-        # Bounded logistic blend of centroid distance ratio and maximum feature Z-score
-        dist_ratio = centroid_distances / self.distance_threshold_
-        z_ratio = max_zscores / self.config.zscore_threshold
-        combined_intensity = 0.55 * dist_ratio + 0.45 * z_ratio
-        anomaly_scores = 1.0 / (1.0 + np.exp(-2.2 * (combined_intensity - 1.0)))
-
-        is_anomaly = (centroid_distances > self.distance_threshold_) | (max_zscores >= self.config.zscore_threshold)
-
-        result = pd.DataFrame(
+        cluster_ids, centroid_distances, max_zscores, anomaly_scores, is_anomaly = self._compute_anomaly_metrics(
+            encoded, num_matrix
+        )
+        return pd.DataFrame(
             {
                 "cluster_id": cluster_ids.astype(int),
                 "centroid_distance": np.round(centroid_distances, 4),
@@ -210,7 +213,6 @@ class BankSegmentationAnomalyDetector:
             },
             index=df.index,
         )
-        return result
 
     def save(self, path: Path) -> Path:
         """Persist fitted detector safely using `.joblib` format.

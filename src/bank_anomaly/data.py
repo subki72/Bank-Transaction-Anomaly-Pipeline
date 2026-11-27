@@ -107,69 +107,110 @@ class TransactionRecord(BaseModel):
         return self.model_dump(by_alias=True)
 
 
+def _sample_normal_regimes(
+    rng: np.random.Generator, n_norm: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Sample two baseline customer segments for normal bank transactions."""
+    half = n_norm // 2
+    tail = n_norm - half
+    amounts = np.concatenate([rng.gamma(1.6, 75.0, size=half), rng.gamma(2.6, 140.0, size=tail)])
+    balances = np.concatenate(
+        [
+            rng.normal(2200.0, 700.0, size=half).clip(120.0, 6500.0),
+            rng.normal(8600.0, 2100.0, size=tail).clip(3500.0, 15000.0),
+        ]
+    )
+    ages = np.concatenate(
+        [rng.integers(18, 38, size=half).astype(float), rng.integers(40, 80, size=tail).astype(float)]
+    )
+    durations = rng.normal(115.0, 42.0, size=n_norm).clip(12.0, 260.0)
+    attempts = rng.choice([1.0, 2.0], size=n_norm, p=[0.93, 0.07])
+    occupations = np.concatenate(
+        [
+            rng.choice(["Student", "Engineer"], size=half, p=[0.7, 0.3]),
+            rng.choice(["Doctor", "Retired", "Engineer"], size=tail, p=[0.4, 0.35, 0.25]),
+        ]
+    )
+    channels = np.concatenate(
+        [
+            rng.choice(["Online", "ATM", "Branch"], size=half, p=[0.6, 0.25, 0.15]),
+            rng.choice(["Branch", "ATM", "Online"], size=tail, p=[0.55, 0.3, 0.15]),
+        ]
+    )
+    return amounts, balances, ages, durations, attempts, occupations, channels
+
+
+def _sample_anomaly_regimes(
+    rng: np.random.Generator, n_anom: int
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Sample high-amount, multi-attempt anomalous transaction profiles."""
+    return (
+        rng.uniform(1150.0, 1950.0, size=n_anom),
+        rng.uniform(100.0, 900.0, size=n_anom),
+        rng.integers(19, 75, size=n_anom).astype(float),
+        rng.choice([10.0, 285.0], size=n_anom),
+        rng.integers(3, 6, size=n_anom).astype(float),
+        rng.choice(OCCUPATIONS, size=n_anom),
+        rng.choice(["Online", "ATM"], size=n_anom, p=[0.7, 0.3]),
+    )
+
+
 def _sample_regimes(
+    rng: np.random.Generator, n_rows: int, include_anomalies: bool
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Combine normal and optional anomalous behavioral regimes."""
+    n_anom = max(1, int(round(n_rows * DEFAULT_ANOMALY_RATE))) if include_anomalies else 0
+    normal_arrays = _sample_normal_regimes(rng, n_rows - n_anom)
+    if n_anom == 0:
+        return normal_arrays
+    anom_arrays = _sample_anomaly_regimes(rng, n_anom)
+    return (
+        np.concatenate([normal_arrays[0], anom_arrays[0]]),
+        np.concatenate([normal_arrays[1], anom_arrays[1]]),
+        np.concatenate([normal_arrays[2], anom_arrays[2]]),
+        np.concatenate([normal_arrays[3], anom_arrays[3]]),
+        np.concatenate([normal_arrays[4], anom_arrays[4]]),
+        np.concatenate([normal_arrays[5], anom_arrays[5]]),
+        np.concatenate([normal_arrays[6], anom_arrays[6]]),
+    )
+
+
+def _build_synthetic_dataframe(
     rng: np.random.Generator,
     n_rows: int,
-    include_anomalies: bool,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Generate correlated numerical and categorical behavioral arrays for synthetic data."""
-    n_anom = max(1, int(round(n_rows * DEFAULT_ANOMALY_RATE))) if include_anomalies else 0
-    n_norm = n_rows - n_anom
-    half_norm = n_norm // 2
-
-    # Two distinct customer behavioral clusters for realistic segmentation
-    amounts_norm = np.concatenate(
-        [
-            rng.gamma(shape=1.6, scale=75.0, size=half_norm),
-            rng.gamma(shape=2.6, scale=140.0, size=n_norm - half_norm),
-        ]
-    )
-    balances_norm = np.concatenate(
-        [
-            rng.normal(loc=2200.0, scale=700.0, size=half_norm).clip(120.0, 6500.0),
-            rng.normal(loc=8600.0, scale=2100.0, size=n_norm - half_norm).clip(3500.0, 15000.0),
-        ]
-    )
-    ages_norm = np.concatenate(
-        [
-            rng.integers(18, 38, size=half_norm).astype(float),
-            rng.integers(40, 80, size=n_norm - half_norm).astype(float),
-        ]
-    )
-    durations_norm = rng.normal(loc=115.0, scale=42.0, size=n_norm).clip(12.0, 260.0)
-    attempts_norm = rng.choice([1.0, 2.0], size=n_norm, p=[0.93, 0.07])
-    occ_norm = np.concatenate(
-        [
-            rng.choice(["Student", "Engineer"], size=half_norm, p=[0.7, 0.3]),
-            rng.choice(["Doctor", "Retired", "Engineer"], size=n_norm - half_norm, p=[0.4, 0.35, 0.25]),
-        ]
-    )
-    channel_norm = np.concatenate(
-        [
-            rng.choice(["Online", "ATM", "Branch"], size=half_norm, p=[0.6, 0.25, 0.15]),
-            rng.choice(["Branch", "ATM", "Online"], size=n_norm - half_norm, p=[0.55, 0.3, 0.15]),
-        ]
-    )
-
-    if n_anom == 0:
-        return amounts_norm, balances_norm, ages_norm, durations_norm, attempts_norm, occ_norm, channel_norm
-
-    amounts_anom = rng.uniform(1150.0, 1950.0, size=n_anom)
-    balances_anom = rng.uniform(100.0, 900.0, size=n_anom)
-    ages_anom = rng.integers(19, 75, size=n_anom).astype(float)
-    durations_anom = rng.choice([10.0, 285.0], size=n_anom)
-    attempts_anom = rng.integers(3, 6, size=n_anom).astype(float)
-    occ_anom = rng.choice(OCCUPATIONS, size=n_anom)
-    channel_anom = rng.choice(["Online", "ATM"], size=n_anom, p=[0.7, 0.3])
-
-    return (
-        np.concatenate([amounts_norm, amounts_anom]),
-        np.concatenate([balances_norm, balances_anom]),
-        np.concatenate([ages_norm, ages_anom]),
-        np.concatenate([durations_norm, durations_anom]),
-        np.concatenate([attempts_norm, attempts_anom]),
-        np.concatenate([occ_norm, occ_anom]),
-        np.concatenate([channel_norm, channel_anom]),
+    regimes: tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray],
+) -> pd.DataFrame:
+    """Assemble shuffled 16-column synthetic transaction DataFrame."""
+    amounts, balances, ages, durations, attempts, occupations, channels = regimes
+    perm = rng.permutation(n_rows)
+    base_prev = datetime(2023, 1, 1, 8, 0, 0, tzinfo=UTC)
+    base_curr = datetime(2024, 11, 4, 8, 0, 0, tzinfo=UTC)
+    prev_sec = rng.integers(0, 365 * 86400, size=n_rows)
+    curr_sec = rng.integers(0, 3600, size=n_rows)
+    octets_c, octets_d = rng.integers(1, 255, size=n_rows), rng.integers(1, 255, size=n_rows)
+    return pd.DataFrame(
+        {
+            "TransactionID": [f"TX{idx:06d}" for idx in range(1, n_rows + 1)],
+            "AccountID": [f"AC{int(acc):05d}" for acc in rng.integers(1, 496, size=n_rows)],
+            "TransactionAmount": np.round(amounts[perm], 2),
+            "PreviousTransactionDate": [
+                (base_prev + timedelta(seconds=int(s))).strftime("%Y-%m-%d %H:%M:%S") for s in prev_sec
+            ],
+            "TransactionType": rng.choice(TRANSACTION_TYPES, size=n_rows, p=[0.77, 0.23]),
+            "Location": rng.choice(LOCATIONS, size=n_rows),
+            "DeviceID": [f"D{int(dev):06d}" for dev in rng.integers(1, 500, size=n_rows)],
+            "IP Address": [f"192.0.{int(c)}.{int(d)}" for c, d in zip(octets_c, octets_d, strict=True)],
+            "MerchantID": [f"M{int(m):03d}" for m in rng.integers(1, 101, size=n_rows)],
+            "Channel": channels[perm],
+            "CustomerAge": ages[perm],
+            "CustomerOccupation": occupations[perm],
+            "TransactionDuration": np.round(durations[perm], 1),
+            "LoginAttempts": attempts[perm],
+            "AccountBalance": np.round(balances[perm], 2),
+            "TransactionDate": [
+                (base_curr + timedelta(seconds=int(s))).strftime("%Y-%m-%d %H:%M:%S") for s in curr_sec
+            ],
+        }
     )
 
 
@@ -187,51 +228,12 @@ def generate_synthetic_transactions(
 
     Returns:
         DataFrame with exact 16 columns matching the Bank Transactions dataset schema.
-
-    Raises:
-        ValueError: If `n_rows` is smaller than 10.
     """
     if n_rows < MIN_SYNTHETIC_ROWS:
         raise ValueError(f"n_rows must be >= {MIN_SYNTHETIC_ROWS}, got {n_rows}.")
-
     rng = np.random.default_rng(seed)
-    amounts, balances, ages, durations, attempts, occupations, channels = _sample_regimes(
-        rng, n_rows, include_anomalies
-    )
-    perm = rng.permutation(n_rows)
-
-    base_prev = datetime(2023, 1, 1, 8, 0, 0, tzinfo=UTC)
-    base_curr = datetime(2024, 11, 4, 8, 0, 0, tzinfo=UTC)
-    prev_offsets = rng.integers(0, 365 * 86400, size=n_rows)
-    curr_offsets = rng.integers(0, 3600, size=n_rows)
-
-    octets_c = rng.integers(1, 255, size=n_rows)
-    octets_d = rng.integers(1, 255, size=n_rows)
-
-    df = pd.DataFrame(
-        {
-            "TransactionID": [f"TX{idx:06d}" for idx in range(1, n_rows + 1)],
-            "AccountID": [f"AC{int(acc):05d}" for acc in rng.integers(1, 496, size=n_rows)],
-            "TransactionAmount": np.round(amounts[perm], 2),
-            "PreviousTransactionDate": [
-                (base_prev + timedelta(seconds=int(sec))).strftime("%Y-%m-%d %H:%M:%S") for sec in prev_offsets
-            ],
-            "TransactionType": rng.choice(TRANSACTION_TYPES, size=n_rows, p=[0.77, 0.23]),
-            "Location": rng.choice(LOCATIONS, size=n_rows),
-            "DeviceID": [f"D{int(dev):06d}" for dev in rng.integers(1, 500, size=n_rows)],
-            "IP Address": [f"192.0.{int(c)}.{int(d)}" for c, d in zip(octets_c, octets_d, strict=True)],
-            "MerchantID": [f"M{int(m):03d}" for m in rng.integers(1, 101, size=n_rows)],
-            "Channel": channels[perm],
-            "CustomerAge": ages[perm],
-            "CustomerOccupation": occupations[perm],
-            "TransactionDuration": np.round(durations[perm], 1),
-            "LoginAttempts": attempts[perm],
-            "AccountBalance": np.round(balances[perm], 2),
-            "TransactionDate": [
-                (base_curr + timedelta(seconds=int(sec))).strftime("%Y-%m-%d %H:%M:%S") for sec in curr_offsets
-            ],
-        }
-    )
+    regimes = _sample_regimes(rng, n_rows, include_anomalies)
+    df = _build_synthetic_dataframe(rng, n_rows, regimes)
     logger.info("Generated %d deterministic synthetic bank transactions (seed=%d).", len(df), seed)
     return df
 

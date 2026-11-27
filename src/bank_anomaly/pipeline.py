@@ -106,6 +106,18 @@ class FraudClassificationPipeline:
         cat_cols = tuple(c for c in MODEL_CATEGORICAL_FEATURES if c in self.feature_cols_)
         return build_feature_preprocessor(numerical_features=num_cols, categorical_features=cat_cols)
 
+    def _prepare_supervised_inputs(self, df: pd.DataFrame, target_col: str) -> tuple[pd.DataFrame, pd.Series]:
+        """Validate target column, clean modeling features, and extract aligned X/y."""
+        if target_col not in df.columns:
+            raise ValueError(f"Target column {target_col!r} not found in DataFrame.")
+        cleaned = clean_transactions(df, drop_duplicates=False)
+        y = pd.to_numeric(cleaned[target_col], errors="coerce").dropna().astype(int)
+        if len(y) != len(cleaned):
+            raise ValueError("Target column contains invalid or null labels.")
+        if y.nunique() < 2:
+            raise ValueError("Target column must contain at least 2 classes for classification.")
+        return cleaned[list(self.feature_cols_)].copy(), y
+
     def fit_and_evaluate(self, df: pd.DataFrame, target_col: str = "Target") -> dict[str, float]:
         """Split data first, fit preprocessing and optional SMOTE on train only, and evaluate.
 
@@ -114,29 +126,11 @@ class FraudClassificationPipeline:
             target_col: Name of binary target column (`0` = normal, `1` = suspicious).
 
         Returns:
-            Dictionary of held-out evaluation metrics (`accuracy`, `precision`, `recall`,
-            `f1_score`, `roc_auc`, `pr_auc`).
-
-        Raises:
-            ValueError: If target column is missing or contains fewer than 2 classes.
+            Dictionary of held-out evaluation metrics.
         """
-        if target_col not in df.columns:
-            raise ValueError(f"Target column {target_col!r} not found in DataFrame.")
-
-        cleaned = clean_transactions(df, drop_duplicates=False)
-        y = pd.to_numeric(cleaned[target_col], errors="coerce").dropna().astype(int)
-        if len(y) != len(cleaned):
-            raise ValueError("Target column contains invalid or null labels.")
-        if y.nunique() < 2:
-            raise ValueError("Target column must contain at least 2 classes for classification.")
-
-        x_raw = cleaned[list(self.feature_cols_)].copy()
+        x_raw, y = self._prepare_supervised_inputs(df, target_col)
         x_train, x_test, y_train, y_test = train_test_split(
-            x_raw,
-            y,
-            test_size=self.config.test_size,
-            random_state=self.config.random_state,
-            stratify=y,
+            x_raw, y, test_size=self.config.test_size, random_state=self.config.random_state, stratify=y
         )
 
         preprocessor = self._build_preprocessor()
@@ -153,7 +147,6 @@ class FraudClassificationPipeline:
         y_pred = classifier.predict(x_test_enc)
         y_prob = classifier.predict_proba(x_test_enc)[:, 1]
         self.metrics_ = self._evaluate_predictions(y_test.to_numpy(), y_pred, y_prob)
-
         logger.info(
             "Trained %s classifier (ROC-AUC=%.4f, F1=%.4f, train=%d, test=%d).",
             self.config.model_name,
